@@ -47,6 +47,7 @@ class Message(Message, Serializable):
     """
 
     __slots__ = [
+        "attr",
         "compression_type",
         "partition_key",
         "value",
@@ -56,22 +57,23 @@ class Message(Message, Serializable):
         "produce_attempt",
         "delivery_report_q",
         "protocol_version",
-        "timestamp"
+        "timestamp",
+        "timestamp_type"
     ]
     VALID_TS_TYPES = integer_types + (float, type(None))
 
     def __init__(self,
                  value,
                  partition_key=None,
-                 compression_type=CompressionType.NONE,
+                 attr=None,
                  offset=-1,
                  partition_id=-1,
                  produce_attempt=0,
                  protocol_version=0,
                  timestamp=None,
                  delivery_report_q=None):
-        self.compression_type = compression_type
         self.partition_key = partition_key
+        self.attr = attr
         self.value = value
         self.offset = offset
         if timestamp is None and protocol_version > 0:
@@ -87,6 +89,8 @@ class Message(Message, Serializable):
         self.delivery_report_q = delivery_report_q
         assert protocol_version in (0, 1)
         self.protocol_version = protocol_version
+        (self.compression_type, self.timestamp_type) = self._unpack_attr()
+
 
     def __len__(self):
         size = 4 + 1 + 1 + 4 + 4
@@ -101,6 +105,7 @@ class Message(Message, Serializable):
     @classmethod
     def decode(self, buff, msg_offset=-1, partition_id=-1):
         (crc, protocol_version, attr) = struct_helpers.unpack_from('iBB', buff, 0)
+        # compression_type = 0x07 & attr
         offset = 6
         timestamp = 0
         if protocol_version > 0:
@@ -110,7 +115,7 @@ class Message(Message, Serializable):
         # TODO: Handle CRC failure
         return Message(val,
                        partition_key=key,
-                       compression_type=attr,
+                       attr=attr,
                        offset=msg_offset,
                        protocol_version=protocol_version,
                        timestamp=timestamp,
@@ -169,6 +174,24 @@ class Message(Message, Serializable):
             self.timestamp_dt = ts
         else:
             raise RuntimeError()
+
+    def _unpack_attr(self):
+        """Parse the message attributes
+
+        The lowest 3 bits contain the compression codec used for the message.
+
+        The fourth lowest bit represents the timestamp type. 0 stands for
+        CreateTime and 1 stands for LogAppendTime.
+        """
+
+        compression_type = None
+        timestamp_type = None
+
+        if (self.attr):
+            compression_type = 0x07 & self.attr
+            timestamp_type = 0x08 & self.attr
+
+        return (compression_type, timestamp_type)
 
 
 class MessageSet(Serializable):

@@ -60,3 +60,14 @@ class OffsetType(object):
     """
     EARLIEST = -2
     LATEST = -1
+
+
+class TimestampType(object):
+    """Enum for the type of supported message timestamps.
+
+    :cvar CREATETIME: Indicates the timestamp is the message create time
+    :cvar LOGAPPENDTIME: Indicates the timestamp is the message log append time
+    """
+    CREATETIME = 0
+    LOGAPPENDTIME = 1
+
